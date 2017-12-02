@@ -9,16 +9,22 @@ namespace ParallelSort
 {
     class Sorter<T> where T : IComparable
     {
-        private int maxNumberOfThreads;
-        private int usedThreads;
-        private List<Thread> threads;
+        protected int maxNumberOfThreads;
+        protected int usedThreads;
+        protected List<Thread> threads;
+        protected Mutex threadMutex;
 
         public Sorter(int maxNumberOfThreads = 1)
         {
-            this.maxNumberOfThreads = maxNumberOfThreads;
-            usedThreads = 0;
+            InitializeComponents(maxNumberOfThreads);
+        }
+        protected virtual void InitializeComponents(int threadsCount)
+        {
+            maxNumberOfThreads = threadsCount;
+            usedThreads = 1;
             threads = new List<Thread>();
             threads.Add(Thread.CurrentThread);
+            threadMutex = new Mutex();
         }
 
         public void QuickSort(T[] array)
@@ -104,17 +110,18 @@ namespace ParallelSort
                 }
         }
 
-        public void ParallelQuickSort(T[] array)
+        public virtual void ParallelQuickSort(T[] array)
         {
             ParallelQS(array, 0, array.Length - 1);
 
             for (int i = 0; i < threads.Count; i++)
                 if (threads[i] != Thread.CurrentThread)
-                    threads[i].Join();
+                    if ( threads[i] != null)
+                        threads[i].Join();
 
             ReleaseResouces();
         }
-        private void ParallelQS(T[] array, int left, int right)
+        protected virtual void ParallelQS(T[] array, int left, int right)
         {
             int i = left,
                 j = right;
@@ -142,13 +149,12 @@ namespace ParallelSort
                     if (!threads.Contains(Thread.CurrentThread))
                         threads.Add(Thread.CurrentThread);
                     ParallelQS(array, left, j);
-                    
                 });
             }
             if (right > i) ParallelQS(array, i, right);
         }
 
-        public void ParallelMergeSort(T[] array)
+        public virtual void ParallelMergeSort(T[] array)
         {
             T[] copy = new T[array.Length];
             for (int i = 0; i < copy.Length; i++)
@@ -158,7 +164,7 @@ namespace ParallelSort
 
             ReleaseResouces();
         }
-        private void ParallelSplitMerge(T[] arrayCopy, int begin, int end, T[] array)
+        protected virtual void ParallelSplitMerge(T[] arrayCopy, int begin, int end, T[] array)
         {
             if (end - begin < 2)
                 return;
@@ -171,7 +177,7 @@ namespace ParallelSort
             if (thrd != Thread.CurrentThread) thrd.Join();
             ParallelMerge(arrayCopy, begin, middle, end, array);
         }
-        private void ParallelMerge(T[] source, int begin, int middle, int end, T[] array)
+        protected virtual void ParallelMerge(T[] source, int begin, int middle, int end, T[] array)
         {
             int i = begin,
                 j = middle;
@@ -189,7 +195,7 @@ namespace ParallelSort
                 }
         }
 
-        public void ParallelBubbleSort(T[] array)
+        public virtual void ParallelBubbleSort(T[] array)
         {
             int n = array.Length;
 
@@ -223,7 +229,7 @@ namespace ParallelSort
 
             ReleaseResouces();
         }
-        private void ParallelComparison(T[] array, int left, int right)
+        protected virtual void ParallelComparison(T[] array, int left, int right)
         {
             for (int i = left; i < right; i += 2)
                 if (array[i].CompareTo(array[i + 1]) > 0)
@@ -232,9 +238,11 @@ namespace ParallelSort
 
         private Thread StartInParallelIfAllowed(Action action)
         {
+            threadMutex.WaitOne();
             if (IsNewThreadsAvailable())
             {
                 Interlocked.Increment(ref usedThreads);
+                threadMutex.ReleaseMutex();
                 Thread newThrd = new Thread(() =>
                 {
                     action();
@@ -245,6 +253,7 @@ namespace ParallelSort
                 return newThrd;
             } else
             {
+                threadMutex.ReleaseMutex();
                 action();
                 return Thread.CurrentThread;
             }
@@ -259,7 +268,7 @@ namespace ParallelSort
 
         private void ReleaseResouces()
         {
-            usedThreads = 0;
+            usedThreads = 1;
             threads.Clear();
         }
     }

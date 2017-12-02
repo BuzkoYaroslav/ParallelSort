@@ -11,11 +11,12 @@ namespace ParallelSort
     enum SortType { Bubble, Merge, Quick};
     static class Analyser
     {
-        private const int minCount = 1000;
-        private const int maxCount = 10000;
-        private const int step = 100;
+        private const int minCount = 1000000;
+        private const int maxCount = 3000000;
+        private const int step = 1000000;
         private const int minPower = 0;
-        private const int maxPower = 4;
+        private const int maxPower = 3;
+        private const int experimentCount = 5;
 
         private const int minValue = -1000;
         private const int maxValue = 1000;
@@ -24,49 +25,59 @@ namespace ParallelSort
 
         public static void AnalyzeSortAlgorithm(SortType type, string fileName)
         {
-            List<Tuple<int, int, long>> results = new List<Tuple<int, int, long>>();
-            Stopwatch wtch = new Stopwatch();
+            Analyze(type, (num) => new Sorter<int>(num), fileName);
+        }
+        public static void AnalyzeOptimizedSortAlgorithm(SortType type, string fileName)
+        {
+            Analyze(type, (num) => new OptimizedSorter<int>(num), fileName);
+        }
 
+        private static void Analyze(SortType type, Func<int, Sorter<int>> factoryFunc, string fileName)
+        {
             Sorter<int>[] sorters = new Sorter<int>[maxPower + 1];
-            Action<int[]>[] algorithms = new Action<int[]>[maxPower + 1];
+            Action<int[]>[] algorithms = new Action<int[]>[maxPower + 2];
             for (int i = 0; i <= maxPower; i++)
             {
-                sorters[i] = new Sorter<int>(Convert.ToInt32(Math.Pow(2, i)));
-                algorithms[i] = SortMethod(sorters[i], type, i != 0);
+                sorters[i] = factoryFunc(Convert.ToInt32(Math.Pow(2, i)));
+                algorithms[i] = SortMethod(sorters[i], type);
             }
+            algorithms[maxPower + 1] = StaticSortMethod(sorters[0], type);
+
+            AnalyzeSortAlgorithm(algorithms, fileName);
+        }
+        private static void AnalyzeSortAlgorithm(Action<int[]>[] algorithms, string fileName)
+        {
+            List<Tuple<int, int, long>> results = new List<Tuple<int, int, long>>();
+            Stopwatch wtch = new Stopwatch();
 
             for (int j = minCount; j <= maxCount; j += step)
             {
                 int[] array = GenerateRandomArray(j);
 
-                for (int i = 0; i <= maxPower; i++)
+                for (int i = 0; i <= maxPower + 1; i++)
                 {
-                    int[] copyArr = new int[j];
-                    array.CopyTo(copyArr, 0);
-                    wtch.Reset();
+                    long time = 0;
 
-                    wtch.Start();
-                    algorithms[i](copyArr);
-                    wtch.Stop();
+                    for (int p = 0; p < experimentCount; p++)
+                    {
+                        int[] copyArr = new int[j];
+                        array.CopyTo(copyArr, 0);
+                        wtch.Reset();
+                        wtch.Start();
+                        algorithms[i](copyArr);
+                        wtch.Stop();
 
-                    results.Add(new Tuple<int, int, long>(j, i, wtch.ElapsedMilliseconds));
+                        time += wtch.ElapsedMilliseconds;
+                    }
+
+
+                    results.Add(new Tuple<int, int, long>(j, i == maxPower + 1 ? -1 : i, time / experimentCount));
                 }
             }
 
-            WriteResultsInFile(results, fileName);
+            FileWorker.WriteSortResultsInFile(results, fileName, (maxCount - minCount) / step + 1, maxPower);
         }
 
-        private static void WriteResultsInFile(List<Tuple<int, int, long>> result, string fileName)
-        {
-            StreamWriter writer = new StreamWriter(fileName, false);
-
-            writer.WriteLine("{0} {1}", (maxCount - minCount) / step + 1, maxPower);
-
-            foreach (Tuple<int, int, long> res in result)
-                writer.WriteLine("{0} {1} {2}", res.Item1, res.Item2, res.Item3);
-
-            writer.Close();
-        }
         private static int[] GenerateRandomArray(int count)
         {
             int[] array = new int[count];
@@ -75,25 +86,30 @@ namespace ParallelSort
 
             return array;
         }
-        private static Action<int[]> SortMethod(Sorter<int> sorter, SortType type, bool parallel)
+        private static Action<int[]> SortMethod(Sorter<int> sorter, SortType type)
         {
             switch (type)
             {
                 case SortType.Bubble:
-                    if (parallel)
                         return sorter.ParallelBubbleSort;
-                    else
-                        return sorter.BubbleSort;
                 case SortType.Merge:
-                    if (parallel)
                         return sorter.ParallelMergeSort;
-                    else
-                        return sorter.MergeSort;
                 case SortType.Quick:
-                    if (parallel)
                         return sorter.ParallelQuickSort;
-                    else
-                        return sorter.QuickSort;
+                default:
+                    return sorter.BubbleSort;
+            }
+        }
+        private static Action<int[]> StaticSortMethod(Sorter<int> sorter, SortType type)
+        {
+            switch (type)
+            {
+                case SortType.Bubble:
+                    return sorter.BubbleSort;
+                case SortType.Merge:
+                    return sorter.MergeSort;
+                case SortType.Quick:
+                    return sorter.QuickSort;
                 default:
                     return sorter.BubbleSort;
             }

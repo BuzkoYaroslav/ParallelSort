@@ -47,6 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Analyser.cs" />
+    <Compile Include="FileWorker.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -61,6 +62,7 @@
     </Compile>
     <Compile Include="GraphicPainter.cs" />
     <Compile Include="MathFunction.cs" />
+    <Compile Include="OptimizedSorter.cs" />
     <Compile Include="Polynomial.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
